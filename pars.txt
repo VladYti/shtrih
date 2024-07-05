@@ -1,0 +1,10 @@
+ORACLE_CONNECTION*******************************************************
+C:\py_projects\arb_shtrih\instantclient_11_2 - oracle instantclient location
+192.168.0.192 - oracle database host
+ARBITR - oracle database service name
+PARUS - oracle database username
+parus - oracle database user password
+************************************************************************
+DDBF_files
+C:\py_projects\arb_shtrih\.dbf\DBF7 - path to shtrih 7 dbf files
+C:\py_projects\arb_shtrih\.dbf\DBF8 - path to shtrih 8 dbf files
