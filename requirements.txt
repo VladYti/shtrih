@@ -1,0 +1,4 @@
+dbfpy3==4.2.2
+oracledb==2.2.1
+pandas==2.2.2
+tqdm==4.66.4
