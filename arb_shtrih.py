@@ -245,7 +245,7 @@ def process(db7: pd.DataFrame,
         i += 1
         idx = list(rn8)[0]
 
-        if isinstance(rn8[1].KRN, pd._libs.missing.NAType):
+        if pd.isna(rn8[1].KRN):
             rn7 = list(db_imp.loc[db_imp['RN8'] == rn8[1].IRN]['SRN7'])
             if len(rn7) == 0:
                 log_proc(['(KRN is NAN) and (import7 not contains rn7)', 'error', rn8[1].IRN, '\n'])
@@ -338,8 +338,8 @@ def main(args) -> int:
     db8.open(mode=dbf.READ_WRITE)
     for row in db8:
         irn = int(row.IRN)
-        krn = pd._libs.missing.NAType() if str(row.KRN).strip() == '' else int(row.KRN)
-        if isinstance(krn, pd._libs.missing.NAType):
+        krn = None if str(row.KRN).strip() == '' else int(row.KRN)
+        if pd.isna(krn):
             new_code = list(result_db.loc[(result_db['IRN'] == irn) & result_db['KRN'].isnull()]['CODE'])
         else:
             new_code = list(
@@ -354,8 +354,10 @@ def main(args) -> int:
 
 if __name__ == '__main__':
     parser = ArgumentParser(prog='Shtrih import codes from 7 to 8',
-                            description='This program was create for import \'codes\' from SHTRIH.DBF(7) to SHTRIH.DBF(8)',
-                            epilog='Work spase required: Oracle_instantClient_11_2 (directory)\n Path to 7\'s and 8\' DBF\'s files')
+                            description='This program was create for import \'codes\' from SHTRIH.DBF(7) to '
+                                        'SHTRIH.DBF(8)',
+                            epilog='Work spase required: Oracle_instantClient_11_2 (directory)\n Path to 7\'s and 8\' '
+                                   'DBF\'s files')
     parser.add_argument('--path', type=dir_path, default='./pars.txt', required=False,
                         help='Path to *.txt file with all neaded parameters\n (See example.txt)')
     args = parser.parse_args()
