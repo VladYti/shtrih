@@ -71,6 +71,7 @@ def convert7(rn7: str) -> str:
 
 def dataframe_from_csv(csv_name: str, tp: str = 'base', version: int = 7) -> pd.DataFrame:
     """
+    Optional feature (doesn't do much)
     Create pd.DataFrame object from passed filename parameter
     :param csv_name: csv filename
     :param tp: type of passing csv file (invsoot, sinbase, etc.)
@@ -113,7 +114,7 @@ def oracle_conn(instant_cli: str, host: str, service: str, authid: str, password
     oracledb.init_oracle_client(lib_dir=instant_cli)
     connection = oracledb.connect(user=authid, password=password, host=host, port=1521, service_name=service)
 
-    with open('import7.csv', 'w', newline='', encoding='UTF-8') as txt:
+    with open('..\\.temp_files\\import7.csv', 'w', newline='', encoding='UTF-8') as txt:
         cursor = connection.cursor()
         writer = csv.writer(txt, delimiter='@',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -129,7 +130,7 @@ def oracle_conn(instant_cli: str, host: str, service: str, authid: str, password
             # print(rn8[0], rn7[0], rn_shtrih)
         cursor.close()
 
-    with open('udo_import7.csv', 'w', newline='', encoding='UTF-8') as txt:
+    with open('..\\.temp_files\\udo_import7.csv', 'w', newline='', encoding='UTF-8') as txt:
         cursor = connection.cursor()
         writer = csv.writer(txt, delimiter='@',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -159,7 +160,7 @@ def read_dbf(path7: str, path8: str) -> None:
     db7 = dbfpy.Dbf(path7_inv)
     db8 = dbfpy.Dbf(path8_inv)
 
-    with open('InvSoot7.csv', 'w', newline='', encoding='utf-8') as csv7:
+    with open('..\\.temp_files\\InvSoot7.csv', 'w', newline='', encoding='utf-8') as csv7:
         spamwriter = csv.writer(csv7, delimiter='@',
                                 quotechar='|', quoting=csv.QUOTE_MINIMAL)
         spamwriter.writerow([i.decode('UTF-8') for i in db7.field_names])
@@ -170,7 +171,7 @@ def read_dbf(path7: str, path8: str) -> None:
     log(count, 'InvSoot7.dbf')
 
     count = 0
-    with open('InvSoot8.csv', 'w', newline='', encoding='utf-8') as csv8:
+    with open('..\\.temp_files\\InvSoot8.csv', 'w', newline='', encoding='utf-8') as csv8:
         spamwriter = csv.writer(csv8, delimiter='@',
                                 quotechar='|', quoting=csv.QUOTE_MINIMAL)
         spamwriter.writerow([i.decode('UTF-8') for i in db8.field_names])
@@ -180,33 +181,35 @@ def read_dbf(path7: str, path8: str) -> None:
     db8.close()
     log(count, 'InvSoot8.dbf')
 
-    path7_base = path7 + '\\SINBASE.dbf'
-    path8_base = path8 + '\\SINBASE.dbf'
+    # Reading 'SINBASE.dbf'
+    # Rejected section (not used)
+    # path7_base = path7 + '\\SINBASE.dbf'
+    # path8_base = path8 + '\\SINBASE.dbf'
 
-    db7_base = dbfpy.Dbf(path7_base)
-    db8_base = dbfpy.Dbf(path8_base)
+    # db7_base = dbfpy.Dbf(path7_base)
+    # db8_base = dbfpy.Dbf(path8_base)
 
-    count = 0
-    with open('SINBASE7.csv', 'w', newline='', encoding='utf-8') as csv7_base:
-        writer = csv.writer(csv7_base, delimiter='@',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow([i.decode('UTF-8') for i in db7_base.field_names])
-        for row in tqdm(db7_base):
-            writer.writerow([str(i).strip() for i in row])
-            count += 1
-        db7_base.close()
-        log(count, 'SInBase7.dbf')
-
-    count = 0
-    with open('SINBASE8.csv', 'w', newline='', encoding='utf-8') as csv8_base:
-        writer = csv.writer(csv8_base, delimiter='@',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow([i.decode('UTF-8') for i in db8_base.field_names])
-        for row in tqdm(db8_base):
-            writer.writerow([str(i).strip() for i in row])
-            count += 1
-        db8_base.close()
-        log(count, 'SInBase8.dbf')
+    # count = 0
+    # with open('SINBASE7.csv', 'w', newline='', encoding='utf-8') as csv7_base:
+    #     writer = csv.writer(csv7_base, delimiter='@',
+    #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
+    #     writer.writerow([i.decode('UTF-8') for i in db7_base.field_names])
+    #     for row in tqdm(db7_base):
+    #         writer.writerow([str(i).strip() for i in row])
+    #         count += 1
+    #     db7_base.close()
+    #     log(count, 'SInBase7.dbf')
+    #
+    # count = 0
+    # with open('SINBASE8.csv', 'w', newline='', encoding='utf-8') as csv8_base:
+    #     writer = csv.writer(csv8_base, delimiter='@',
+    #                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
+    #     writer.writerow([i.decode('UTF-8') for i in db8_base.field_names])
+    #     for row in tqdm(db8_base):
+    #         writer.writerow([str(i).strip() for i in row])
+    #         count += 1
+    #     db8_base.close()
+    #     log(count, 'SInBase8.dbf')
 
 
 def log_proc(args):
@@ -318,12 +321,15 @@ def main(args) -> int:
     db_invsoot7 = dataframe_from_csv('InvSoot7.csv', tp='soot')
     db_invsoot8 = dataframe_from_csv('InvSoot8.csv', tp='soot')
 
-    #
+    # Reading table import7 and udo_import7 (contains table7 'INSOST') from oracle database
     oracle_conn(params['cli'], params['host'], params['service'], params['authid'], params['password'])
-    db_import7 = dataframe_from_csv('import7.csv', tp='imp')
 
+    # Convert those tables to pd.DataFrame objects
+    db_import7 = dataframe_from_csv('import7.csv', tp='imp')
     db_invsubst = pd.read_csv('udo_import7.csv', delimiter='@', dtype={'RN7': pd.Int64Dtype(), 'RN8': pd.Int64Dtype()})
 
+    # Main process function
+    # Replace codes from main 'InvSoot.dbf' file with codes from 'InvSoot.dbf' by Parus-7
     result_db = process(db_invsoot7, db_invsoot8, db_import7, db_invsubst)
 
     # Write data to existing 'InvSoot.dbf' file new codes
