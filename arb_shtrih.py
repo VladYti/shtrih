@@ -3,10 +3,12 @@ import csv
 import datetime
 from argparse import ArgumentParser
 
+import numpy as np
 from tqdm import tqdm
 import pandas as pd
 import oracledb
-from dbfpy3 import dbf
+from dbfpy3 import dbf as dbfpy
+import dbf
 
 
 def log(ct: int, name: str) -> None:
@@ -149,8 +151,6 @@ def oracle_conn(instant_cli: str, host: str, service: str, authid: str, password
     connection.close()
 
 
-
-
 def read_dbf(path7: str, path8: str) -> None:
     """
     Function read input dbf's files, version 7 and 8, and write it to csv files
@@ -162,8 +162,8 @@ def read_dbf(path7: str, path8: str) -> None:
     path7_inv = path7 + '\\InvSoot.dbf'
     path8_inv = path8 + '\\InvSoot.dbf'
 
-    db7 = dbf.Dbf(path7_inv)
-    db8 = dbf.Dbf(path8_inv)
+    db7 = dbfpy.Dbf(path7_inv)
+    db8 = dbfpy.Dbf(path8_inv)
 
     with open('InvSoot7.csv', 'w', newline='', encoding='utf-8') as csv7:
         spamwriter = csv.writer(csv7, delimiter='@',
@@ -189,10 +189,8 @@ def read_dbf(path7: str, path8: str) -> None:
     path7_base = path7 + '\\SINBASE.dbf'
     path8_base = path8 + '\\SINBASE.dbf'
 
-    db7_base = dbf.Dbf(path7_base)
-    db8_base = dbf.Dbf(path8_base)
-
-
+    db7_base = dbfpy.Dbf(path7_base)
+    db8_base = dbfpy.Dbf(path8_base)
 
     count = 0
     with open('SINBASE7.csv', 'w', newline='', encoding='utf-8') as csv7_base:
@@ -232,10 +230,10 @@ def log_proc(args):
 def process(db7: pd.DataFrame,
             db8: pd.DataFrame,
             db_imp: pd.DataFrame,
-            invpack: pd.DataFrame,
-            invsubst: pd.DataFrame):
+            invsubst: pd.DataFrame) -> pd.DataFrame:
     """
 
+    :param invsubst:
     :param db7:
     :param db8:
     :param db_imp:
@@ -244,8 +242,14 @@ def process(db7: pd.DataFrame,
     und_count = 0
     some_err_count = 0
     codes = set()
+    codes_list = dict()
 
+    max_code = 14641
+    i = 0
     for rn8 in tqdm(db8.iterrows(), desc='Process database'):
+        i += 1
+        idx = list(rn8)[0]
+
         if isinstance(rn8[1].KRN, pd._libs.missing.NAType):
             rn7 = list(db_imp.loc[db_imp['RN8'] == rn8[1].IRN]['SRN7'])
             if len(rn7) == 0:
@@ -258,15 +262,19 @@ def process(db7: pd.DataFrame,
                     tmp = db7.loc[(db7['IRN'] == rn7)]
                     if len(list(tmp['CODE'])) == 0:
                         err_count += 1
+                        codes_list[idx] = '000' + str(max_code + i)
                         log_proc(['(MAX ERROR) :(KRN is NAN) and (invsoot7 not contains rn7)', rn8[1].IRN, '\n'])
                     else:
                         some_err_count += 1
-                        log_proc(['(KRN is NAN) and (KRN is not NAN in invsoot7)', 'error', rn8[1].IRN, '\n', tmp, '\n'])
+                        codes_list[idx] = '000' + str(max_code + i)
+                        log_proc(
+                            ['(KRN is NAN) and (KRN is not NAN in invsoot7)', 'error', rn8[1].IRN, '\n', tmp, '\n'])
                 else:
                     if code[0] in codes:
                         log_proc(['err'])
                     else:
                         codes.add(code[0])
+                        codes_list[idx] = code[0]
                         log_proc(['ALL RIGHT', rn8[1].IRN, ' --> ', rn7, ': ', code[0], '\n'])
             pass
 
@@ -281,6 +289,7 @@ def process(db7: pd.DataFrame,
             invs_rn7 = list(invsubst.loc[invsubst['RN8'] == rn8[1].KRN]['RN7'])
             if len(invs_rn7) == 0:
                 und_count += 1
+                codes_list[idx] = '000' + str(max_code + i)
                 log_proc(['InvSUBST nomen is undefined', 'error', rn8[1].IRN, rn8[1].KRN, 'Неизвестно', '\n'])
                 continue
             else:
@@ -291,33 +300,15 @@ def process(db7: pd.DataFrame,
                 log_proc(['error'])
             else:
                 codes.add(code7)
+                codes_list[idx] = code7
                 log_proc(['ALL RIGHT', rn8[1].IRN, rn8[1].KRN, ' --> ', rn7, invs_rn7, ' --> ', code7, '\n'])
 
         pass
-    print(und_count)
-    print(err_count)
-    print(some_err_count)
-    # vis = set()
-    # for rn8 in tqdm(db8.IRN, desc='Process database'):
-    #     if len(list(db_imp.loc[db_imp['RN8'] == rn8, 'SRN7'])) == 0:
-    #         log_proc(['Not_found', rn8, '\n'])
-    #         continue
-    #     rn7 = list(db_imp.loc[db_imp['RN8'] == rn8, 'SRN7'])[0]
-    #     code7 = list(db7.loc[db7['IRN'] == rn7, 'CODE'])
-    #     if len(code7) > 1:
-    #         krn7 = list(db7.loc[db7['IRN'] == rn7, 'KRN'])
-    #         krn8 = list(db8.loc[db8['IRN'] == rn8, 'KRN'])
-    #         log_proc(['Group_card \n', rn8, krn8, len(krn8), '\n', rn7, krn7, len(krn7), '\n', code7])
-    #         if len(krn7) - len(krn8) > 1:
-    #             if rn8 not in vis:
-    #                 vis.add(rn8)
-    #                 count += 1
-    #             log_proc(['+' * 10, '\n'])
-    #
-    #     else:
-    #         log_proc([rn8, rn7, code7])
-    #
-    # log_proc(['Bag card count - ', count])
+
+    for key, value in tqdm(codes_list.items(), desc='Changing codes'):
+        db8.loc[key, 'CODE'] = value
+
+    return db8
 
 
 def main(args) -> int:
@@ -330,23 +321,39 @@ def main(args) -> int:
     params = read_params(PARAMS_PATH)
 
     read_dbf(params['dbf7'], params['dbf8'])
-    db_sinbase8 = dataframe_from_csv('SINBASE8.csv', tp='base', version=8)
-    db_sinbase7 = dataframe_from_csv('SINBASE7.csv', tp='base', version=7)
+    # db_sinbase8 = dataframe_from_csv('SINBASE8.csv', tp='base', version=8)
+    # db_sinbase7 = dataframe_from_csv('SINBASE7.csv', tp='base', version=7)
 
-    print(db_sinbase7.info())
+    # print(db_sinbase7.info())
     db_invsoot7 = dataframe_from_csv('InvSoot7.csv', tp='soot')
     db_invsoot8 = dataframe_from_csv('InvSoot8.csv', tp='soot')
 
     oracle_conn(params['cli'], params['host'], params['service'], params['authid'], params['password'])
     db_import7 = dataframe_from_csv('import7.csv', tp='imp')
-    print(db_import7.info(), 'import7')
-    print(db_invsoot8.info(), 'invsoost8')
-    print(db_invsoot7.info(), 'invsoost7')
+    # print(db_import7.info(), 'import7')
+    # print(db_invsoot8.info(), 'invsoost8')
+    # print(db_invsoot7.info(), 'invsoost7')
 
-    db_invpack = pd.read_csv('invpack.csv', delimiter='@', dtype={'PRN': pd.Int64Dtype(), 'RN':pd.Int64Dtype()})
+    # db_invpack = pd.read_csv('invpack.csv', delimiter='@', dtype={'PRN': pd.Int64Dtype(), 'RN':pd.Int64Dtype()})
     db_invsubst = pd.read_csv('udo_import7.csv', delimiter='@', dtype={'RN7': pd.Int64Dtype(), 'RN8':pd.Int64Dtype()})
 
-    process(db_invsoot7, db_invsoot8, db_import7, db_invpack, db_invsubst)
+    result_db = process(db_invsoot7, db_invsoot8, db_import7, db_invsubst)
+
+    db8 = dbf.Table(params['dbf8'] + '\\InvSoot.dbf')
+    print(db8.field_names)
+    db8.open(mode=dbf.READ_WRITE)
+    for row in db8:
+        irn = int(row.IRN)
+        krn = pd._libs.missing.NAType() if str(row.KRN).strip() == '' else int(row.KRN)
+        if isinstance(krn, pd._libs.missing.NAType):
+            new_code = list(result_db.loc[(result_db['IRN'] == irn) & result_db['KRN'].isnull()]['CODE'])
+        else:
+            new_code = list(
+                result_db.loc[(result_db['IRN'] == irn) & (result_db['KRN'] == krn)][
+                    'CODE'])
+        with row:
+            row.CODE = new_code[0] + ' '*12
+    db8.close()
 
     return 0
 
