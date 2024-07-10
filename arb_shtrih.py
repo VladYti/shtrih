@@ -1,5 +1,6 @@
 import os
 import csv
+import shutil
 import datetime
 from argparse import ArgumentParser
 
@@ -17,7 +18,7 @@ def log(ct: int, name: str) -> None:
     :param name: filename
     :return: none
     """
-    with open('log.txt', 'a', encoding='UTF-8') as logfile:
+    with open('..\\.log_files\\log.txt', 'a', encoding='UTF-8') as logfile:
         logfile.write(f'{datetime.datetime.now()} -- {ct} total row write to {name} \n')
 
 
@@ -175,7 +176,7 @@ def read_dbf(path7: str, path8: str) -> None:
         spamwriter = csv.writer(csv8, delimiter='@',
                                 quotechar='|', quoting=csv.QUOTE_MINIMAL)
         spamwriter.writerow([i.decode('UTF-8') for i in db8.field_names])
-        for row in tqdm(db8):
+        for row in tqdm(db8, desc='Import from dbf to CSV file'):
             count += 1
             spamwriter.writerow([str(i).strip() for i in row])
     db8.close()
@@ -217,7 +218,7 @@ def log_proc(args):
     service function, logging something, write it to log_proc.txt
     :param args: some arguments
     """
-    with open('log_proc.txt', 'a', encoding='utf-8') as f:
+    with open('..\\.log_files\\log_proc.txt', 'a', encoding='utf-8') as f:
         # f.write(f'{args[0]}, {args[1]}, {args[2]}\n')
         f.write(' -| '.join([str(i) for i in args]))
         f.write('\n')
@@ -318,25 +319,28 @@ def main(args) -> int:
     read_dbf(params['dbf7'], params['dbf8'])
 
     # Create pd.DataFrame objects from read dbf's
-    db_invsoot7 = dataframe_from_csv('InvSoot7.csv', tp='soot')
-    db_invsoot8 = dataframe_from_csv('InvSoot8.csv', tp='soot')
+    db_invsoot7 = dataframe_from_csv('..\\.temp_files\\InvSoot7.csv', tp='soot')
+    db_invsoot8 = dataframe_from_csv('..\\.temp_files\\InvSoot8.csv', tp='soot')
 
     # Reading table import7 and udo_import7 (contains table7 'INSOST') from oracle database
     oracle_conn(params['cli'], params['host'], params['service'], params['authid'], params['password'])
 
     # Convert those tables to pd.DataFrame objects
-    db_import7 = dataframe_from_csv('import7.csv', tp='imp')
-    db_invsubst = pd.read_csv('udo_import7.csv', delimiter='@', dtype={'RN7': pd.Int64Dtype(), 'RN8': pd.Int64Dtype()})
+    db_import7 = dataframe_from_csv('..\\.temp_files\\import7.csv', tp='imp')
+    db_invsubst = pd.read_csv('..\\.temp_files\\udo_import7.csv', delimiter='@',
+                              dtype={'RN7': pd.Int64Dtype(), 'RN8': pd.Int64Dtype()})
 
     # Main process function
     # Replace codes from main 'InvSoot.dbf' file with codes from 'InvSoot.dbf' by Parus-7
     result_db = process(db_invsoot7, db_invsoot8, db_import7, db_invsubst)
 
+    shutil.copyfile(params['dbf8'] + '\\InvSoot.dbf', '..\\.temp_files\\result.dbf')
+
     # Write data to existing 'InvSoot.dbf' file new codes
-    db8 = dbf.Table(params['dbf8'] + '\\InvSoot.dbf')
+    db8 = dbf.Table('..\\.temp_files\\result.dbf')
     print(db8.field_names)
     db8.open(mode=dbf.READ_WRITE)
-    for row in db8:
+    for row in tqdm(db8, desc='Writing to dbf'):
         irn = int(row.IRN)
         krn = None if str(row.KRN).strip() == '' else int(row.KRN)
         if pd.isna(krn):
@@ -346,8 +350,10 @@ def main(args) -> int:
                 result_db.loc[(result_db['IRN'] == irn) & (result_db['KRN'] == krn)][
                     'CODE'])
         with row:
-            row.CODE = new_code[0] + ' '*12
+            row.CODE = new_code[0] + ' ' * 12
     db8.close()
+
+    shutil.copyfile('..\\.temp_files\\result.dbf', '..\\.result\\NEW_InvSoot.dbf')
 
     return 0
 

@@ -1,0 +1,6 @@
+dbf==0.99.1
+dbfpy3==4.2.2
+numpy==2.0.0
+oracledb==2.1.1
+pandas==2.2.2
+tqdm==4.66.4
