@@ -81,6 +81,25 @@ def oracle_imp(instant_cli: str, host: str, service: str, authid: str, password:
     return None
 
 
+def oracle123(instant_cli: str, host: str, service: str, authid: str, password: str) -> None:
+    oracledb.init_oracle_client(lib_dir=instant_cli)
+    connection = oracledb.connect(user=authid, password=password, host=host, port=1521, service_name=service)
+
+    with open('invpack.csv', 'w', newline='', encoding='UTF-8') as txt:
+        cursor = connection.cursor()
+        writer = csv.writer(txt, delimiter='@',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(['PRN', 'RN'])
+        invpack = cursor.execute(
+            'SELECT ip.rn, inv.rn FROM invpack ip JOIN INVENTORY inv ON ip.prn=inv.rn '
+        )
+        for row in tqdm(invpack):
+            writer.writerow(row)
+        cursor.close()
+    connection.close()
+    return None
+
+
 def dataframe_from_csv(csv_name: str) -> pd.DataFrame:
     db = pd.read_csv(csv_name, delimiter='@')
     return db
@@ -96,40 +115,40 @@ def main(args):
     PARAMS_PATH = args.path
     params = read_params(PARAMS_PATH)
 
-    oracle_imp(params['cli'], params['host'], params['service'], params['authid'], params['password'])
-
-    invsubst = dataframe_from_csv('inv_subst.csv')
-    insost = dataframe_from_csv('insost.csv')
-
-    print(invsubst.info())
-    print(insost.info())
-
-    oracledb.init_oracle_client(lib_dir=params['cli'])
-    connection = oracledb.connect(user=params['authid'],
-                                  password=params['password'],
-                                  host=params['host'],
-                                  port=1521,
-                                  service_name=params['service'])
-
-    cursor = connection.cursor()
-    for prn in tqdm(np.unique(invsubst.PRN, axis=0)):
-        prn_nom = np.unique(invsubst.loc[invsubst['PRN'] == prn, 'NOMEN'])
-        for nom in prn_nom:
-            rn7_s = list(insost.loc[(insost['PRN'] == prn) & (insost['NOMEN'] == nom), 'RN7'])
-            rn8_s = list(invsubst.loc[(invsubst['PRN'] == prn) & (invsubst['NOMEN'] == nom), 'RN'])
-
-            # print(rn7_s, len(rn7_s))
-            # print(rn8_s, len(rn8_s), '\n')
-            for rn7, rn8 in zip(rn7_s, rn8_s):
-                cursor.execute(
-                    'insert into udo_import7 '
-                    '(table7, rn7, rn8) '
-                    'values '
-                    '( \' INSOST \' ,' + '\'' + rn7 + '\'' + ',' + str(rn8) + ')'
-                )
-                connection.commit()
-    cursor.close()
-    connection.close()
+    oracle123(params['cli'], params['host'], params['service'], params['authid'], params['password'])
+    #
+    # invsubst = dataframe_from_csv('inv_subst.csv')
+    # insost = dataframe_from_csv('insost.csv')
+    #
+    # print(invsubst.info())
+    # print(insost.info())
+    #
+    # oracledb.init_oracle_client(lib_dir=params['cli'])
+    # connection = oracledb.connect(user=params['authid'],
+    #                               password=params['password'],
+    #                               host=params['host'],
+    #                               port=1521,
+    #                               service_name=params['service'])
+    #
+    # cursor = connection.cursor()
+    # for prn in tqdm(np.unique(invsubst.PRN, axis=0)):
+    #     prn_nom = np.unique(invsubst.loc[invsubst['PRN'] == prn, 'NOMEN'])
+    #     for nom in prn_nom:
+    #         rn7_s = list(insost.loc[(insost['PRN'] == prn) & (insost['NOMEN'] == nom), 'RN7'])
+    #         rn8_s = list(invsubst.loc[(invsubst['PRN'] == prn) & (invsubst['NOMEN'] == nom), 'RN'])
+    #
+    #         # print(rn7_s, len(rn7_s))
+    #         # print(rn8_s, len(rn8_s), '\n')
+    #         for rn7, rn8 in zip(rn7_s, rn8_s):
+    #             cursor.execute(
+    #                 'insert into udo_import7 '
+    #                 '(table7, rn7, rn8) '
+    #                 'values '
+    #                 '( \' INSOST \' ,' + '\'' + rn7 + '\'' + ',' + str(rn8) + ')'
+    #             )
+    #             connection.commit()
+    # cursor.close()
+    # connection.close()
 
 
 if __name__ == '__main__':

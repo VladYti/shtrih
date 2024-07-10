@@ -229,21 +229,74 @@ def log_proc(args):
         f.write('_' * 40 + '\n')
 
 
-def process(db7: pd.DataFrame, db8: pd.DataFrame, db_imp: pd.DataFrame):
+def process(db7: pd.DataFrame,
+            db8: pd.DataFrame,
+            db_imp: pd.DataFrame,
+            invpack: pd.DataFrame,
+            invsubst: pd.DataFrame):
     """
 
     :param db7:
     :param db8:
     :param db_imp:
     """
-    count = 0
+    err_count = 0
+    und_count = 0
+    some_err_count = 0
+    codes = set()
 
-    uimport = pd.read_csv('udo_import7.csv', delimiter='@')
-    for irn8 in tqdm(db8.IRN, desc='Process database'):
+    for rn8 in tqdm(db8.iterrows(), desc='Process database'):
+        if isinstance(rn8[1].KRN, pd._libs.missing.NAType):
+            rn7 = list(db_imp.loc[db_imp['RN8'] == rn8[1].IRN]['SRN7'])
+            if len(rn7) == 0:
+                log_proc(['(KRN is NAN) and (import7 not contains rn7)', 'error', rn8[1].IRN, '\n'])
 
+            else:
+                rn7 = rn7[0]
+                code = list(db7.loc[(db7['IRN'] == rn7) & (db7['KRN'].isnull())]['CODE'])
+                if len(code) == 0:
+                    tmp = db7.loc[(db7['IRN'] == rn7)]
+                    if len(list(tmp['CODE'])) == 0:
+                        err_count += 1
+                        log_proc(['(MAX ERROR) :(KRN is NAN) and (invsoot7 not contains rn7)', rn8[1].IRN, '\n'])
+                    else:
+                        some_err_count += 1
+                        log_proc(['(KRN is NAN) and (KRN is not NAN in invsoot7)', 'error', rn8[1].IRN, '\n', tmp, '\n'])
+                else:
+                    if code[0] in codes:
+                        log_proc(['err'])
+                    else:
+                        codes.add(code[0])
+                        log_proc(['ALL RIGHT', rn8[1].IRN, ' --> ', rn7, ': ', code[0], '\n'])
+            pass
+
+        else:
+            rn7 = list(db_imp.loc[db_imp['RN8'] == rn8[1].IRN]['SRN7'])
+            if len(rn7) == 0:
+                log_proc(['(KRN is not NAN) and (import7 not contains rn7)', 'error', rn8[1].IRN, '\n'])
+                continue
+            else:
+                rn7 = rn7[0]
+
+            invs_rn7 = list(invsubst.loc[invsubst['RN8'] == rn8[1].KRN]['RN7'])
+            if len(invs_rn7) == 0:
+                und_count += 1
+                log_proc(['InvSUBST nomen is undefined', 'error', rn8[1].IRN, rn8[1].KRN, 'Неизвестно', '\n'])
+                continue
+            else:
+                invs_rn7 = invs_rn7[0]
+
+            code7 = list(db7.loc[(db7['IRN'] == rn7) & (db7['KRN'] == invs_rn7)]['CODE'])[0]
+            if code7 in codes:
+                log_proc(['error'])
+            else:
+                codes.add(code7)
+                log_proc(['ALL RIGHT', rn8[1].IRN, rn8[1].KRN, ' --> ', rn7, invs_rn7, ' --> ', code7, '\n'])
 
         pass
-
+    print(und_count)
+    print(err_count)
+    print(some_err_count)
     # vis = set()
     # for rn8 in tqdm(db8.IRN, desc='Process database'):
     #     if len(list(db_imp.loc[db_imp['RN8'] == rn8, 'SRN7'])) == 0:
@@ -290,7 +343,10 @@ def main(args) -> int:
     print(db_invsoot8.info(), 'invsoost8')
     print(db_invsoot7.info(), 'invsoost7')
 
-    process(db_invsoot7, db_invsoot8, db_import7)
+    db_invpack = pd.read_csv('invpack.csv', delimiter='@', dtype={'PRN': pd.Int64Dtype(), 'RN':pd.Int64Dtype()})
+    db_invsubst = pd.read_csv('udo_import7.csv', delimiter='@', dtype={'RN7': pd.Int64Dtype(), 'RN8':pd.Int64Dtype()})
+
+    process(db_invsoot7, db_invsoot8, db_import7, db_invpack, db_invsubst)
 
     return 0
 
