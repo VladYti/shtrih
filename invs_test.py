@@ -51,7 +51,7 @@ def oracle_imp(instant_cli: str, host: str, service: str, authid: str, password:
     oracledb.init_oracle_client(lib_dir=instant_cli)
     connection = oracledb.connect(user=authid, password=password, host=host, port=1521, service_name=service)
 
-    with open('inv_subst.csv', 'w', newline='', encoding='UTF-8') as txt:
+    with open('..\\.temp_files\\inv_subst.csv', 'w', newline='', encoding='UTF-8') as txt:
         cursor = connection.cursor()
         writer = csv.writer(txt, delimiter='@',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -64,7 +64,7 @@ def oracle_imp(instant_cli: str, host: str, service: str, authid: str, password:
         for row in tqdm(invsubst):
             writer.writerow(row)
 
-    with open('insost.csv', 'w', newline='', encoding='UTF-8') as txt:
+    with open('..\\.temp_files\\insost.csv', 'w', newline='', encoding='UTF-8') as txt:
         cursor = connection.cursor()
         writer = csv.writer(txt, delimiter='@',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -85,7 +85,7 @@ def oracle123(instant_cli: str, host: str, service: str, authid: str, password: 
     oracledb.init_oracle_client(lib_dir=instant_cli)
     connection = oracledb.connect(user=authid, password=password, host=host, port=1521, service_name=service)
 
-    with open('invpack.csv', 'w', newline='', encoding='UTF-8') as txt:
+    with open('..\\.temp_files\\invpack.csv', 'w', newline='', encoding='UTF-8') as txt:
         cursor = connection.cursor()
         writer = csv.writer(txt, delimiter='@',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -101,60 +101,65 @@ def oracle123(instant_cli: str, host: str, service: str, authid: str, password: 
 
 
 def dataframe_from_csv(csv_name: str) -> pd.DataFrame:
-    db = pd.read_csv(csv_name, delimiter='@')
+    db = pd.read_csv(csv_name, delimiter='@', encoding='UTF-8')
     return db
 
 
 def oracle_insert(instant_cli: str, host: str, service: str, authid: str, password: str) -> None:
+    invsubst = dataframe_from_csv('..\\.temp_files\\inv_subst.csv')
+    insost = dataframe_from_csv('..\\.temp_files\\insost.csv')
+
     oracledb.init_oracle_client(lib_dir=instant_cli)
     connection = oracledb.connect(user=authid, password=password, host=host, port=1521, service_name=service)
     cursor = connection.cursor()
+
+    cursor.execute(
+        f'drop table {authid}.UDO_T_IMPORT7'
+    )
+
+    cursor.execute(
+        'create table UDO_T_IMPORT7 '
+        '(table7    varchar2(20),'
+        ' RN7       varchar2(10),'
+        ' RN8       NUMBER(17))'
+    )
+
+    for prn in tqdm(np.unique(invsubst.PRN, axis=0)):
+        prn_nom = np.unique(invsubst.loc[invsubst['PRN'] == prn, 'NOMEN'])
+
+        for nom in prn_nom:
+            rn7_s = list(insost.loc[(insost['PRN'] == prn) & (insost['NOMEN'] == nom), 'RN7'])
+            rn8_s = list(invsubst.loc[(invsubst['PRN'] == prn) & (invsubst['NOMEN'] == nom), 'RN'])
+
+            # print(rn7_s, len(rn7_s))
+            # print(rn8_s, len(rn8_s), '\n')
+            for rn7, rn8 in zip(rn7_s, rn8_s):
+                cursor.execute(
+                    'insert into UDO_T_IMPORT7 '
+                    '(table7, rn7, rn8) '
+                    'values '
+                    '( \' INSOST \' ,' + '\'' + rn7 + '\'' + ',' + str(rn8) + ')'
+                )
+                connection.commit()
+
+    cursor.close()
+    connection.close()
 
 
 def main(args):
     PARAMS_PATH = args.path
     params = read_params(PARAMS_PATH)
 
-    oracle123(params['cli'], params['host'], params['service'], params['authid'], params['password'])
-    #
-    # invsubst = dataframe_from_csv('inv_subst.csv')
-    # insost = dataframe_from_csv('insost.csv')
-    #
-    # print(invsubst.info())
-    # print(insost.info())
-    #
-    # oracledb.init_oracle_client(lib_dir=params['cli'])
-    # connection = oracledb.connect(user=params['authid'],
-    #                               password=params['password'],
-    #                               host=params['host'],
-    #                               port=1521,
-    #                               service_name=params['service'])
-    #
-    # cursor = connection.cursor()
-    # for prn in tqdm(np.unique(invsubst.PRN, axis=0)):
-    #     prn_nom = np.unique(invsubst.loc[invsubst['PRN'] == prn, 'NOMEN'])
-    #     for nom in prn_nom:
-    #         rn7_s = list(insost.loc[(insost['PRN'] == prn) & (insost['NOMEN'] == nom), 'RN7'])
-    #         rn8_s = list(invsubst.loc[(invsubst['PRN'] == prn) & (invsubst['NOMEN'] == nom), 'RN'])
-    #
-    #         # print(rn7_s, len(rn7_s))
-    #         # print(rn8_s, len(rn8_s), '\n')
-    #         for rn7, rn8 in zip(rn7_s, rn8_s):
-    #             cursor.execute(
-    #                 'insert into udo_import7 '
-    #                 '(table7, rn7, rn8) '
-    #                 'values '
-    #                 '( \' INSOST \' ,' + '\'' + rn7 + '\'' + ',' + str(rn8) + ')'
-    #             )
-    #             connection.commit()
-    # cursor.close()
-    # connection.close()
+    oracle_imp(params['cli'], params['host'],  params['service'], params['authid'], params['password'])
+    oracle_insert(params['cli'], params['host'],  params['service'], params['authid'], params['password'])
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(prog='Shtrih import codes from 7 to 8',
-                            description='This program was create for import \'codes\' from SHTRIH.DBF(7) to SHTRIH.DBF(8)',
-                            epilog='Work spase required: Oracle_instantClient_11_2 (directory)\n Path to 7\'s and 8\' DBF\'s files')
+                            description='This program was create for import \'codes\' from SHTRIH.DBF(7) to '
+                                        'SHTRIH.DBF(8)',
+                            epilog='Work spase required: Oracle_instantClient_11_2 (directory)\n Path to 7\'s and 8\' '
+                                   'DBF\'s files')
     parser.add_argument('--path', type=dir_path, default='./pars.txt', required=False,
                         help='Path to *.txt file with all neaded parameters\n (See example.txt)')
     args = parser.parse_args()
